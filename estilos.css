@@ -173,3 +173,12 @@ body {
 .seccion p { margin: 0; color: var(--tinta-suave); }
 .seccion ul { margin: 0; padding-left: 20px; color: var(--tinta-suave); }
 .seccion li { margin-bottom: 4px; }
+
+/* 6. Estados: cargando, error y duda */
+.cargando { text-align: center; padding: 32px 0; color: var(--tinta-suave); }
+.girando { font-size: 48px; display: inline-block; animation: girar 2s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .girando, .decoracion { animation: none; } }
+
+.aviso-error { background: var(--rosa-claro); color: #a8414f; }
+.etiqueta-duda { background: #fff3d6; color: #9a6b00; }
