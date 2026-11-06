@@ -34,9 +34,9 @@
       <input id="entrada-camara" type="file" accept="image/*" capture="environment" hidden>
     </label>
 
-    <!-- Funciones futuras: se ven, pero aún no funcionan -->
+    <!-- Accesos: el herbario ya funciona; el quiz viene después -->
     <nav class="proximamente">
-      <div class="tarjeta-futura"><span>📖</span>Herbario<small>Pronto</small></div>
+      <button id="boton-herbario" class="tarjeta-futura activa"><span>📖</span>Herbario<small id="contador-herbario">Sin flores aún</small></button>
       <div class="tarjeta-futura"><span>🎓</span>Quiz<small>Pronto</small></div>
     </nav>
   </main>
@@ -52,6 +52,25 @@
 
     <!-- JavaScript llena este espacio con los datos de la flor -->
     <article id="ficha" class="ficha"></article>
+
+    <!-- Debajo de la ficha: aviso de "guardada" o botón para eliminar -->
+    <div id="acciones-ficha" class="acciones-ficha"></div>
+  </section>
+
+  <!-- ===== PANTALLA 3: HERBARIO (empieza oculta) ===== -->
+  <section id="pantalla-herbario" class="pantalla" hidden>
+    <button id="boton-volver-herbario" class="boton-volver">← Inicio</button>
+    <h2 class="titulo-pantalla">Mi herbario</h2>
+    <p id="resumen-herbario" class="lema"></p>
+
+    <!-- Si no hay flores, mostramos este mensaje -->
+    <div id="herbario-vacio" class="vacio" hidden>
+      <div class="decoracion" aria-hidden="true">🌱</div>
+      <p>Aún no hay flores. Toca <strong>📷 Flor</strong> en el inicio y cada flor que reconozcas se guardará aquí.</p>
+    </div>
+
+    <!-- JavaScript llena esta cuadrícula con una tarjeta por flor -->
+    <div id="lista-herbario" class="cuadricula"></div>
   </section>
 
   <!-- Conectamos la "instalación eléctrica" al final, cuando todo ya existe -->
