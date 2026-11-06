@@ -1,0 +1,175 @@
+/* ACABADOS de la app: colores, tipografías, espacios. */
+
+/* 1. Paleta de colores ("carta de materiales"). Cambia un valor aquí y cambia en toda la app. */
+:root {
+  --fondo: #fbf6f1;        /* crema cálido */
+  --tinta: #3a2e2a;        /* café oscuro para texto */
+  --tinta-suave: #7a6a63;
+  --rosa: #d9727f;         /* color principal */
+  --rosa-claro: #f6dfe1;
+  --verde: #6f8f6b;        /* tallo / hojas */
+  --verde-claro: #e3ece0;
+  --blanco: #ffffff;
+  --sombra: 0 8px 24px rgba(58, 46, 42, 0.08);
+  --radio: 20px;           /* qué tan redondeadas son las esquinas */
+}
+
+/* 2. Reglas generales */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; } /* lo que está oculto, siempre oculto */
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: "Inter", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.pantalla {
+  max-width: 480px;        /* en computadora no se estira de más */
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  min-height: 100vh;
+}
+
+/* 3. Barra superior con el nombre de la página */
+.barra-superior {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--rosa);
+  background: var(--blanco);
+  border-bottom: 1px solid var(--rosa-claro);
+}
+
+/* 4. Pantalla de inicio */
+#pantalla-inicio {
+  min-height: calc(100vh - 56px); /* la pantalla menos la barra de arriba */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+  background: radial-gradient(circle at 50% 20%, var(--rosa-claro), transparent 60%);
+}
+
+.decoracion { font-size: 72px; animation: flotar 4s ease-in-out infinite; }
+@keyframes flotar {
+  50% { transform: translateY(-8px) rotate(6deg); }
+}
+
+.logo {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 56px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -1px;
+}
+
+.lema { color: var(--tinta-suave); max-width: 320px; margin: 0 0 12px; }
+
+/* Botones */
+.boton-camara {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 18px;
+  border-radius: 999px;
+  background: var(--rosa);
+  color: var(--blanco);
+  font-weight: 600;
+  font-size: 18px;
+  box-shadow: 0 10px 24px rgba(217, 114, 127, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.boton-camara:active { transform: scale(0.97); }
+.boton-camara .icono { font-size: 22px; }
+
+.boton-secundario, .boton-volver {
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--verde);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px;
+}
+.boton-secundario { text-decoration: underline; text-underline-offset: 4px; }
+
+/* Tarjetas de "Pronto" */
+.proximamente { display: flex; gap: 12px; width: 100%; margin-top: 24px; }
+.tarjeta-futura {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px;
+  background: var(--blanco);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  font-weight: 500;
+  opacity: 0.7;
+}
+.tarjeta-futura span { font-size: 28px; }
+.tarjeta-futura small { color: var(--tinta-suave); font-size: 12px; }
+
+/* 5. Pantalla de la ficha */
+.foto-marco {
+  margin: 12px 0 20px;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radio);
+  overflow: hidden;
+  background: var(--rosa-claro);
+  box-shadow: var(--sombra);
+}
+.foto-marco img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.ficha h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 34px;
+  margin: 0;
+}
+.nombre-cientifico { font-style: italic; color: var(--tinta-suave); margin: 0 0 8px; }
+
+.aviso {
+  font-size: 13px;
+  background: var(--verde-claro);
+  color: var(--verde);
+  padding: 8px 12px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.etiquetas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.etiqueta {
+  background: var(--rosa-claro);
+  color: var(--rosa);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.seccion {
+  background: var(--blanco);
+  border-radius: var(--radio);
+  padding: 18px 20px;
+  margin-top: 14px;
+  box-shadow: var(--sombra);
+}
+.seccion h3 { margin: 0 0 8px; font-size: 16px; }
+.seccion p { margin: 0; color: var(--tinta-suave); }
+.seccion ul { margin: 0; padding-left: 20px; color: var(--tinta-suave); }
+.seccion li { margin-bottom: 4px; }

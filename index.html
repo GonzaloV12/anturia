@@ -1,0 +1,60 @@
+<!doctype html>
+<!-- ESTRUCTURA de la app. Piensa en esto como el plano: qué espacios existen. -->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <!-- Esta línea hace que se vea bien en el celular (no en miniatura) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Anturia</title>
+  <!-- Tipografías de Google: una elegante para títulos y una limpia para texto -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Conectamos el archivo de estilos (los acabados) -->
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+  <!-- ===== BARRA SUPERIOR: el nombre de la página, como el letrero de una fachada ===== -->
+  <header class="barra-superior">Anturia</header>
+
+  <!-- ===== PANTALLA 1: INICIO ===== -->
+  <main id="pantalla-inicio" class="pantalla">
+    <div class="decoracion" aria-hidden="true">🌸</div>
+
+    <h1 class="logo">Anturia</h1>
+    <p class="lema">Fotografía una flor y descubre su nombre, su significado y cómo cuidarla.</p>
+
+    <!-- El botón de la cámara.
+         Truco: es un <label> que "envuelve" un campo de archivo invisible.
+         capture="environment" le pide al celular la cámara TRASERA. -->
+    <label class="boton-camara">
+      <span class="icono" aria-hidden="true">📷</span>
+      <span>Flor</span>
+      <input id="entrada-camara" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+
+    <!-- Funciones futuras: se ven, pero aún no funcionan -->
+    <nav class="proximamente">
+      <div class="tarjeta-futura"><span>📖</span>Herbario<small>Pronto</small></div>
+      <div class="tarjeta-futura"><span>🎓</span>Quiz<small>Pronto</small></div>
+    </nav>
+  </main>
+
+  <!-- ===== PANTALLA 2: FICHA DE LA FLOR (empieza oculta) ===== -->
+  <section id="pantalla-ficha" class="pantalla" hidden>
+    <button id="boton-volver" class="boton-volver">← Volver</button>
+
+    <!-- Aquí se muestra la foto que tomó ella -->
+    <div class="foto-marco">
+      <img id="foto-flor" alt="Foto de la flor">
+    </div>
+
+    <!-- JavaScript llena este espacio con los datos de la flor -->
+    <article id="ficha" class="ficha"></article>
+  </section>
+
+  <!-- Conectamos la "instalación eléctrica" al final, cuando todo ya existe -->
+  <script src="app.js"></script>
+</body>
+</html>
