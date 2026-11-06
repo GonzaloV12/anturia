@@ -37,8 +37,8 @@ Si no estás seguro de la especie, indica confianza "baja" y menciona en "mensaj
 function cabecerasCORS(origen) {
   return {
     "Access-Control-Allow-Origin": origen === ORIGEN_PERMITIDO ? origen : ORIGEN_PERMITIDO,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Clave-Herbario",
   };
 }
 
@@ -49,12 +49,79 @@ function responder(datos, estado, origen) {
   });
 }
 
+// ============================================================
+// HERBARIO EN LA NUBE (archivero KV de Cloudflare, conectado como HERBARIO).
+// Cada flor se guarda con la llave "flor:<id>". Las flores eliminadas dejan
+// una "lápida" (borrada: true) para que los otros dispositivos también la borren.
+//   GET    /herbario       → lista de { id, fecha, borrada }
+//   GET    /herbario/<id>  → la flor completa (foto + ficha)
+//   PUT    /herbario/<id>  → guarda una flor
+//   DELETE /herbario/<id>  → elimina una flor
+// Todo pide la cabecera X-Clave-Herbario, que debe coincidir con HERBARIO_CLAVE.
+// ============================================================
+async function manejarHerbario(request, env, origen, ruta) {
+  if (!env.HERBARIO || !env.HERBARIO_CLAVE) {
+    return responder({ error: "El archivero de la nube no está configurado." }, 500, origen);
+  }
+  if (request.headers.get("X-Clave-Herbario") !== env.HERBARIO_CLAVE) {
+    return responder({ error: "Clave del herbario incorrecta." }, 401, origen);
+  }
+
+  const id = ruta.split("/")[2] || "";
+  if (id && !/^[0-9]{1,20}$/.test(id)) return responder({ error: "Flor inválida" }, 400, origen);
+
+  // Lista de flores (sin fotos, para que sea rápida).
+  if (request.method === "GET" && !id) {
+    const flores = [];
+    let cursor;
+    do {
+      const pagina = await env.HERBARIO.list({ prefix: "flor:", cursor });
+      for (const llave of pagina.keys) {
+        flores.push({ id: llave.name.slice(5), ...(llave.metadata || {}) });
+      }
+      cursor = pagina.list_complete ? undefined : pagina.cursor;
+    } while (cursor);
+    return responder({ flores }, 200, origen);
+  }
+
+  if (request.method === "GET") {
+    const flor = await env.HERBARIO.get("flor:" + id, "json");
+    return flor ? responder(flor, 200, origen) : responder({ error: "No existe" }, 404, origen);
+  }
+
+  if (request.method === "PUT") {
+    const texto = await request.text();
+    if (texto.length > 2_000_000) return responder({ error: "Flor demasiado grande" }, 400, origen);
+    let flor;
+    try { flor = JSON.parse(texto); } catch { return responder({ error: "Datos inválidos" }, 400, origen); }
+    if (flor.id !== id || typeof flor.fecha !== "string") return responder({ error: "Datos inválidos" }, 400, origen);
+    await env.HERBARIO.put("flor:" + id, texto, { metadata: { fecha: flor.fecha } });
+    return responder({ ok: true }, 200, origen);
+  }
+
+  if (request.method === "DELETE") {
+    await env.HERBARIO.put("flor:" + id, "{}", { metadata: { borrada: true } });
+    return responder({ ok: true }, 200, origen);
+  }
+
+  return responder({ error: "Operación no válida" }, 405, origen);
+}
+
 export default {
   async fetch(request, env) {
     const origen = request.headers.get("Origin") || "";
+    const ruta = new URL(request.url).pathname;
 
     // El navegador pregunta primero "¿puedo enviarte datos?" (preflight).
     if (request.method === "OPTIONS") return new Response(null, { headers: cabecerasCORS(origen) });
+
+    // Herbario en la nube.
+    if (ruta === "/herbario" || ruta.startsWith("/herbario/")) {
+      if (origen !== ORIGEN_PERMITIDO) return responder({ error: "Origen no permitido" }, 403, origen);
+      return manejarHerbario(request, env, origen, ruta);
+    }
+
+    // Identificar una flor.
     if (request.method !== "POST") return responder({ error: "Usa POST" }, 405, origen);
     if (origen !== ORIGEN_PERMITIDO) return responder({ error: "Origen no permitido" }, 403, origen);
 

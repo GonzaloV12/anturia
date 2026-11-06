@@ -42,6 +42,7 @@ const contadorHerbario = document.getElementById("contador-herbario");
 const resumenHerbario = document.getElementById("resumen-herbario");
 const herbarioVacio = document.getElementById("herbario-vacio");
 const listaHerbario = document.getElementById("lista-herbario");
+const cajaNube = document.getElementById("caja-nube");
 const fotoFlor = document.getElementById("foto-flor");
 const ficha = document.getElementById("ficha");
 const accionesFicha = document.getElementById("acciones-ficha");
@@ -98,6 +99,87 @@ const herbario = {
   eliminar: (id) => enBodega("readwrite", (e) => e.delete(id)),
 };
 
+// ============================================================
+// 3b. LA NUBE: copia del herbario en el archivero de Cloudflare.
+//     La clave del herbario se recuerda en este dispositivo.
+// ============================================================
+const LLAVE_CLAVE = "anturia-clave-herbario";
+const LLAVE_PENDIENTES = "anturia-borrar-pendiente";
+
+function leer(llave, porDefecto) {
+  try { return JSON.parse(localStorage.getItem(llave)) ?? porDefecto; } catch { return porDefecto; }
+}
+function escribir(llave, valor) {
+  try { valor == null ? localStorage.removeItem(llave) : localStorage.setItem(llave, JSON.stringify(valor)); } catch {}
+}
+
+// Hace un pedido al archivero, a través del intermediario.
+async function nube(metodo, id, flor) {
+  const respuesta = await fetch(URL_INTERMEDIARIO + "/herbario" + (id ? "/" + id : ""), {
+    method: metodo,
+    headers: { "X-Clave-Herbario": leer(LLAVE_CLAVE, ""), ...(flor ? { "Content-Type": "application/json" } : {}) },
+    body: flor ? JSON.stringify(flor) : undefined,
+  });
+  const datos = await respuesta.json();
+  if (!respuesta.ok) {
+    const error = new Error(datos.error || "Error de la nube");
+    error.estado = respuesta.status;
+    throw error;
+  }
+  return datos;
+}
+
+// Cuadra los dos inventarios: lo que falte en el teléfono se baja,
+// lo que falte en la nube se sube, y lo borrado se borra en ambos.
+async function sincronizar() {
+  if (!URL_INTERMEDIARIO || !leer(LLAVE_CLAVE, "")) return false;
+
+  // Primero, borrados que quedaron pendientes (por ejemplo, sin internet).
+  for (const id of leer(LLAVE_PENDIENTES, [])) await nube("DELETE", id);
+  escribir(LLAVE_PENDIENTES, null);
+
+  const { flores: enNube } = await nube("GET");
+  const locales = await herbario.todas();
+  const idsLocales = new Set(locales.map((f) => f.id));
+  const idsNube = new Set(enNube.map((f) => f.id));
+  let cambios = false;
+
+  for (const f of enNube) {
+    if (f.borrada && idsLocales.has(f.id)) { await herbario.eliminar(f.id); cambios = true; }
+    if (!f.borrada && !idsLocales.has(f.id)) { await herbario.guardar(await nube("GET", f.id)); cambios = true; }
+  }
+  for (const f of locales) {
+    if (!idsNube.has(f.id)) await nube("PUT", f.id, f);
+  }
+  return cambios;
+}
+
+// Muestra en el herbario el estado de la nube.
+function dibujarNube(estado, detalle) {
+  if (estado === "sin-clave") {
+    cajaNube.innerHTML = `
+      <p><strong>☁️ Guarda tu herbario en la nube</strong><br>
+      Así no se pierde si cambias de celular o borras el navegador.</p>
+      ${detalle ? `<p class="aviso-error-texto">${escapar(detalle)}</p>` : ""}
+      <form id="form-clave" class="form-clave">
+        <input id="entrada-clave" type="password" placeholder="Clave del herbario" autocomplete="current-password" required>
+        <button type="submit">Conectar</button>
+      </form>`;
+    document.getElementById("form-clave").addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      escribir(LLAVE_CLAVE, document.getElementById("entrada-clave").value.trim());
+      mostrarHerbario({ conNube: true });
+    });
+    return;
+  }
+  const textos = {
+    sincronizando: "☁️ Sincronizando con la nube…",
+    ok: "☁️ Tu herbario está guardado en la nube",
+    error: "☁️ No se pudo conectar con la nube. Tus flores siguen guardadas en este teléfono.",
+  };
+  cajaNube.innerHTML = `<p class="estado-nube">${textos[estado]}</p>`;
+}
+
 function fechaBonita(iso) {
   return new Date(iso).toLocaleDateString("es", { day: "numeric", month: "short", year: "numeric" });
 }
@@ -112,9 +194,10 @@ async function actualizarContador() {
   }
 }
 
-// Dibuja la cuadrícula del herbario.
-async function mostrarHerbario() {
+// Dibuja la cuadrícula del herbario (y, si se pide, sincroniza con la nube).
+async function mostrarHerbario({ conNube = false } = {}) {
   irA("herbario");
+  if (conNube) sincronizarYRedibujar();
   let flores = [];
   try {
     flores = await herbario.todas();
@@ -133,6 +216,25 @@ async function mostrarHerbario() {
       <span class="tarjeta-flor-nombre">${escapar(f.ficha.nombre)}</span>
       <small>${fechaBonita(f.fecha)}</small>
     </button>`).join("");
+}
+
+async function sincronizarYRedibujar() {
+  if (!URL_INTERMEDIARIO) { cajaNube.innerHTML = ""; return; }
+  if (!leer(LLAVE_CLAVE, "")) return dibujarNube("sin-clave");
+  dibujarNube("sincronizando");
+  try {
+    const cambios = await sincronizar();
+    dibujarNube("ok");
+    if (cambios && !pantallas.herbario.hidden) mostrarHerbario();
+    actualizarContador();
+  } catch (error) {
+    if (error.estado === 401) {
+      escribir(LLAVE_CLAVE, null);
+      dibujarNube("sin-clave", "Esa clave no es correcta. Intenta de nuevo.");
+    } else {
+      dibujarNube("error");
+    }
+  }
 }
 
 // Abre una flor guardada (no gasta saldo: la ficha ya está guardada).
@@ -156,6 +258,10 @@ async function abrirDelHerbario(id) {
       return;
     }
     await herbario.eliminar(id);
+    if (leer(LLAVE_CLAVE, "")) {
+      // Si no hay internet, se anota para borrarla en la nube más tarde.
+      nube("DELETE", id).catch(() => escribir(LLAVE_PENDIENTES, [...leer(LLAVE_PENDIENTES, []), id]));
+    }
     await actualizarContador();
     mostrarHerbario();
   });
@@ -266,14 +372,21 @@ entradaCamara.addEventListener("change", async () => {
     // Si es una flor, se guarda sola en el herbario.
     if (datos.es_flor) {
       try {
-        await herbario.guardar({
+        const flor = {
           id: String(Date.now()),
           fecha: new Date().toISOString(),
           foto: await achicarFoto(archivo, 800, 0.8), // una copia más liviana para guardar
           ficha: datos,
-        });
+        };
+        await herbario.guardar(flor);
         accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario</p>`;
         actualizarContador();
+        // Copia en la nube (si falla, se sube en la próxima sincronización).
+        if (leer(LLAVE_CLAVE, "")) {
+          nube("PUT", flor.id, flor)
+            .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
+            .catch(() => {});
+        }
       } catch {
         accionesFicha.innerHTML = `<p class="nota-guardada">No se pudo guardar en el herbario (¿modo incógnito o memoria llena?).</p>`;
       }
@@ -289,7 +402,7 @@ botonVolver.addEventListener("click", () => {
   else irA("inicio");
 });
 
-botonHerbario.addEventListener("click", mostrarHerbario);
+botonHerbario.addEventListener("click", () => mostrarHerbario({ conNube: true }));
 botonVolverHerbario.addEventListener("click", () => irA("inicio"));
 
 // Tocar una tarjeta del herbario abre su ficha.
@@ -298,5 +411,6 @@ listaHerbario.addEventListener("click", (evento) => {
   if (tarjeta) abrirDelHerbario(tarjeta.dataset.id);
 });
 
-// Al abrir la app, mostramos cuántas flores hay.
+// Al abrir la app, mostramos cuántas flores hay y sincronizamos en silencio.
 actualizarContador();
+sincronizar().then((cambios) => cambios && actualizarContador()).catch(() => {});
