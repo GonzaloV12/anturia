@@ -2,7 +2,7 @@
 
 // 0. DIRECCIÓN DEL INTERMEDIARIO (Cloudflare Worker).
 //    Mientras esté vacía, la app muestra la ficha de ejemplo.
-const URL_INTERMEDIARIO = "";
+const URL_INTERMEDIARIO = "https://anturia.gonzalovargasbco.workers.dev";
 
 // 1. DATOS DE EJEMPLO (inventados). Se usan si todavía no hay intermediario.
 const florEjemplo = {
