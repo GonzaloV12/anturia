@@ -6,10 +6,12 @@
   <!-- Esta línea hace que se vea bien en el celular (no en miniatura) -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Anturia</title>
-  <!-- Tipografías de Google: una elegante para títulos y una limpia para texto -->
+  <!-- Tipografías de Google: una elegante para títulos y una limpia para texto.
+       Se cargan "sin bloquear": la página se muestra de inmediato con la letra del
+       sistema y las tipografías se aplican cuando llegan (media="print" + onload). -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <!-- Conectamos el archivo de estilos (los acabados) -->
   <link rel="stylesheet" href="estilos.css">
 </head>
