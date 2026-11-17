@@ -38,7 +38,7 @@ function cabecerasCORS(origen) {
   return {
     "Access-Control-Allow-Origin": origen === ORIGEN_PERMITIDO ? origen : ORIGEN_PERMITIDO,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Clave-Herbario",
+    "Access-Control-Allow-Headers": "Content-Type",
   };
 }
 
@@ -57,14 +57,10 @@ function responder(datos, estado, origen) {
 //   GET    /herbario/<id>  → la flor completa (foto + ficha)
 //   PUT    /herbario/<id>  → guarda una flor
 //   DELETE /herbario/<id>  → elimina una flor
-// Todo pide la cabecera X-Clave-Herbario, que debe coincidir con HERBARIO_CLAVE.
 // ============================================================
 async function manejarHerbario(request, env, origen, ruta) {
-  if (!env.HERBARIO || !env.HERBARIO_CLAVE) {
+  if (!env.HERBARIO) {
     return responder({ error: "El archivero de la nube no está configurado." }, 500, origen);
-  }
-  if (request.headers.get("X-Clave-Herbario") !== env.HERBARIO_CLAVE) {
-    return responder({ error: "Clave del herbario incorrecta." }, 401, origen);
   }
 
   const id = ruta.split("/")[2] || "";
@@ -157,9 +153,6 @@ const PRESUPUESTOS = ["bajo", "medio", "alto"];
 const texto = (v, max) => (typeof v === "string" ? v.slice(0, max) : "");
 
 async function disenarRamo(request, env, origen) {
-  if (!env.HERBARIO_CLAVE || request.headers.get("X-Clave-Herbario") !== env.HERBARIO_CLAVE) {
-    return responder({ error: "Conecta tu herbario (con su clave) para usar el asistente." }, 401, origen);
-  }
   let p;
   try { p = await request.json(); } catch { return responder({ error: "Datos inválidos" }, 400, origen); }
   const ocasion = OCASIONES.includes(p.ocasion) ? p.ocasion : "otra";

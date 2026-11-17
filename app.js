@@ -107,9 +107,7 @@ const herbario = {
 
 // ============================================================
 // 3b. LA NUBE: copia del herbario en el archivero de Cloudflare.
-//     La clave del herbario se recuerda en este dispositivo.
 // ============================================================
-const LLAVE_CLAVE = "anturia-clave-herbario";
 const LLAVE_PENDIENTES = "anturia-borrar-pendiente";
 
 function leer(llave, porDefecto) {
@@ -123,7 +121,7 @@ function escribir(llave, valor) {
 async function nube(metodo, id, flor) {
   const respuesta = await fetch(URL_INTERMEDIARIO + "/herbario" + (id ? "/" + id : ""), {
     method: metodo,
-    headers: { "X-Clave-Herbario": leer(LLAVE_CLAVE, ""), ...(flor ? { "Content-Type": "application/json" } : {}) },
+    headers: flor ? { "Content-Type": "application/json" } : {},
     body: flor ? JSON.stringify(flor) : undefined,
   });
   const datos = await respuesta.json();
@@ -138,7 +136,7 @@ async function nube(metodo, id, flor) {
 // Cuadra los dos inventarios: lo que falte en el teléfono se baja,
 // lo que falte en la nube se sube, y lo borrado se borra en ambos.
 async function sincronizar() {
-  if (!URL_INTERMEDIARIO || !leer(LLAVE_CLAVE, "")) return false;
+  if (!URL_INTERMEDIARIO) return false;
 
   // Primero, borrados que quedaron pendientes (por ejemplo, sin internet).
   for (const id of leer(LLAVE_PENDIENTES, [])) await nube("DELETE", id);
@@ -161,23 +159,7 @@ async function sincronizar() {
 }
 
 // Muestra en el herbario el estado de la nube.
-function dibujarNube(estado, detalle) {
-  if (estado === "sin-clave") {
-    cajaNube.innerHTML = `
-      <p><strong>☁️ Guarda tu herbario en la nube</strong><br>
-      Así no se pierde si cambias de celular o borras el navegador.</p>
-      ${detalle ? `<p class="aviso-error-texto">${escapar(detalle)}</p>` : ""}
-      <form id="form-clave" class="form-clave">
-        <input id="entrada-clave" type="password" placeholder="Clave del herbario" autocomplete="current-password" required>
-        <button type="submit">Conectar</button>
-      </form>`;
-    document.getElementById("form-clave").addEventListener("submit", async (evento) => {
-      evento.preventDefault();
-      escribir(LLAVE_CLAVE, document.getElementById("entrada-clave").value.trim());
-      mostrarHerbario({ conNube: true });
-    });
-    return;
-  }
+function dibujarNube(estado) {
   const textos = {
     sincronizando: "☁️ Sincronizando con la nube…",
     ok: "☁️ Tu herbario está guardado en la nube",
@@ -226,20 +208,14 @@ async function mostrarHerbario({ conNube = false } = {}) {
 
 async function sincronizarYRedibujar() {
   if (!URL_INTERMEDIARIO) { cajaNube.innerHTML = ""; return; }
-  if (!leer(LLAVE_CLAVE, "")) return dibujarNube("sin-clave");
   dibujarNube("sincronizando");
   try {
     const cambios = await sincronizar();
     dibujarNube("ok");
     if (cambios && !pantallas.herbario.hidden) mostrarHerbario();
     actualizarContador();
-  } catch (error) {
-    if (error.estado === 401) {
-      escribir(LLAVE_CLAVE, null);
-      dibujarNube("sin-clave", "Esa clave no es correcta. Intenta de nuevo.");
-    } else {
-      dibujarNube("error");
-    }
+  } catch {
+    dibujarNube("error");
   }
 }
 
@@ -264,10 +240,8 @@ async function abrirDelHerbario(id) {
       return;
     }
     await herbario.eliminar(id);
-    if (leer(LLAVE_CLAVE, "")) {
-      // Si no hay internet, se anota para borrarla en la nube más tarde.
-      nube("DELETE", id).catch(() => escribir(LLAVE_PENDIENTES, [...leer(LLAVE_PENDIENTES, []), id]));
-    }
+    // Si no hay internet, se anota para borrarla en la nube más tarde.
+    nube("DELETE", id).catch(() => escribir(LLAVE_PENDIENTES, [...leer(LLAVE_PENDIENTES, []), id]));
     await actualizarContador();
     mostrarHerbario();
   });
@@ -455,15 +429,6 @@ async function pedirRamo(evento) {
     return;
   }
 
-  // El asistente usa la clave del herbario para proteger tu saldo.
-  if (!leer(LLAVE_CLAVE, "")) {
-    resultadoRamo.innerHTML = `
-      <div class="aviso">🔒 Para usar el asistente, primero conecta tu herbario con su clave.</div>
-      <button id="ir-a-herbario" class="boton-galeria">📖 Ir al herbario</button>`;
-    document.getElementById("ir-a-herbario").addEventListener("click", () => mostrarHerbario({ conNube: true }));
-    return;
-  }
-
   // Nombres de las flores del herbario (sin repetir), si ella lo pidió.
   let nombres = [];
   if (datos.get("usarHerbario")) {
@@ -482,7 +447,7 @@ async function pedirRamo(evento) {
   try {
     const respuesta = await fetch(URL_INTERMEDIARIO + "/ramo", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Clave-Herbario": leer(LLAVE_CLAVE, "") },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ocasion: datos.get("ocasion"),
         estilo: datos.get("estilo"),
@@ -539,11 +504,9 @@ async function procesarFoto(entrada) {
         accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario</p>`;
         actualizarContador();
         // Copia en la nube (si falla, se sube en la próxima sincronización).
-        if (leer(LLAVE_CLAVE, "")) {
-          nube("PUT", flor.id, flor)
-            .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
-            .catch(() => {});
-        }
+        nube("PUT", flor.id, flor)
+          .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
+          .catch(() => {});
       } catch {
         accionesFicha.innerHTML = `<p class="nota-guardada">No se pudo guardar en el herbario (¿modo incógnito o memoria llena?).</p>`;
       }
@@ -574,6 +537,9 @@ listaHerbario.addEventListener("click", (evento) => {
   const tarjeta = evento.target.closest(".tarjeta-flor");
   if (tarjeta) abrirDelHerbario(tarjeta.dataset.id);
 });
+
+// La clave vieja del herbario ya no se usa: la borramos del teléfono.
+escribir("anturia-clave-herbario", null);
 
 // Al abrir la app, mostramos cuántas flores hay y sincronizamos en silencio.
 actualizarContador();
