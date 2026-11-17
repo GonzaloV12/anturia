@@ -107,6 +107,115 @@ async function manejarHerbario(request, env, origen, ruta) {
   return responder({ error: "Operación no válida" }, 405, origen);
 }
 
+// ============================================================
+// ASISTENTE DE RAMOS: Claude diseña un ramo según la ocasión.
+// ============================================================
+const RAMO = {
+  type: "object",
+  additionalProperties: false,
+  required: ["nombre", "concepto", "paleta", "flores", "follaje", "pasos", "significado", "consejos", "costo"],
+  properties: {
+    nombre:   { type: "string", description: "Nombre corto y evocador para el ramo" },
+    concepto: { type: "string", description: "La idea del ramo en 1 o 2 frases" },
+    paleta: {
+      type: "array", description: "3 a 5 colores principales",
+      items: {
+        type: "object", additionalProperties: false, required: ["color", "hex"],
+        properties: { color: { type: "string" }, hex: { type: "string", description: "Color en formato #RRGGBB" } },
+      },
+    },
+    flores: {
+      type: "array", description: "3 a 6 flores",
+      items: {
+        type: "object", additionalProperties: false,
+        required: ["nombre", "cantidad", "funcion", "por_que", "en_herbario"],
+        properties: {
+          nombre:      { type: "string" },
+          cantidad:    { type: "string", description: "Ej. '5 tallos'" },
+          funcion:     { type: "string", enum: ["protagonista", "secundaria", "relleno"] },
+          por_que:     { type: "string", description: "Por qué encaja, en una frase" },
+          en_herbario: { type: "boolean", description: "true si es una de las flores del herbario de la usuaria" },
+        },
+      },
+    },
+    follaje:     { type: "array", items: { type: "string" }, description: "1 a 3 follajes o verdes" },
+    pasos:       { type: "array", items: { type: "string" }, description: "4 a 6 pasos para armarlo" },
+    significado: { type: "string", description: "Qué transmite el conjunto según el lenguaje de las flores" },
+    consejos:    { type: "array", items: { type: "string" }, description: "2 a 3 consejos prácticos (conservación, entrega, alternativas)" },
+    costo:       { type: "string", description: "Rango de costo aproximado en flores, en palabras sencillas" },
+  },
+};
+
+const INSTRUCCIONES_RAMO = `Eres una florista experta que enseña a una estudiante de floristería.
+Diseña un ramo realista para el pedido, con flores que se consigan en florerías comunes.
+Si te dan flores de su herbario, úsalas cuando encajen (marca en_herbario: true) para que aprenda con las que ya conoce,
+pero no fuerces flores que no combinan. Explica con lenguaje claro y práctico, en español.`;
+
+const OCASIONES = ["boda", "cumpleaños", "aniversario", "condolencias", "graduación", "romántico", "otra"];
+const MEDIDAS = ["pequeño", "mediano", "grande"];
+const PRESUPUESTOS = ["bajo", "medio", "alto"];
+const texto = (v, max) => (typeof v === "string" ? v.slice(0, max) : "");
+
+async function disenarRamo(request, env, origen) {
+  if (!env.HERBARIO_CLAVE || request.headers.get("X-Clave-Herbario") !== env.HERBARIO_CLAVE) {
+    return responder({ error: "Conecta tu herbario (con su clave) para usar el asistente." }, 401, origen);
+  }
+  let p;
+  try { p = await request.json(); } catch { return responder({ error: "Datos inválidos" }, 400, origen); }
+  const ocasion = OCASIONES.includes(p.ocasion) ? p.ocasion : "otra";
+  const tamano = MEDIDAS.includes(p.tamano) ? p.tamano : "mediano";
+  const presupuesto = PRESUPUESTOS.includes(p.presupuesto) ? p.presupuesto : "medio";
+  const herbario = Array.isArray(p.herbario) ? p.herbario.slice(0, 80).map((n) => texto(n, 60)).filter(Boolean) : [];
+
+  const pedido = `Ocasión: ${ocasion}
+Colores o estilo: ${texto(p.estilo, 200) || "libre"}
+Tamaño: ${tamano}
+Presupuesto: ${presupuesto}
+Notas: ${texto(p.notas, 500) || "ninguna"}
+Flores de su herbario: ${herbario.length ? herbario.join(", ") : "no usar herbario"}`;
+
+  return preguntarAClaude(env, origen, INSTRUCCIONES_RAMO, RAMO, [{ type: "text", text: pedido }],
+    "No se pudo diseñar este ramo. Prueba cambiando el pedido.");
+}
+
+// ============================================================
+// PREGUNTARLE A CLAUDE (lo usan "identificar" y "ramo").
+// ============================================================
+async function preguntarAClaude(env, origen, instrucciones, esquema, contenido, mensajeRechazo) {
+  const respuesta = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2026-10-21",
+      "anthropic-beta": "server-side-fallback-2026-07-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-5-5",
+      max_tokens: 16000,
+      fallbacks: "default", // si Claude rechaza la consulta, la reintenta con otro modelo
+      output_config: { effort: "medium", format: { type: "json_schema", schema: esquema } },
+      system: instrucciones,
+      messages: [{ role: "user", content: contenido }],
+    }),
+  });
+
+  if (!respuesta.ok) {
+    const detalle = await respuesta.text();
+    console.log("Error de Claude", respuesta.status, detalle);
+    return responder({ error: "Claude no pudo responder ahora. Intenta de nuevo en un momento." }, 502, origen);
+  }
+
+  const mensaje = await respuesta.json();
+  if (mensaje.stop_reason === "refusal") return responder({ error: mensajeRechazo }, 422, origen);
+  const bloque = (mensaje.content || []).find((b) => b.type === "text");
+  try {
+    return responder(JSON.parse(bloque.text), 200, origen);
+  } catch {
+    return responder({ error: "La respuesta llegó incompleta. Intenta de nuevo." }, 502, origen);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origen = request.headers.get("Origin") || "";
@@ -121,57 +230,22 @@ export default {
       return manejarHerbario(request, env, origen, ruta);
     }
 
-    // Identificar una flor.
     if (request.method !== "POST") return responder({ error: "Usa POST" }, 405, origen);
     if (origen !== ORIGEN_PERMITIDO) return responder({ error: "Origen no permitido" }, 403, origen);
 
+    // Asistente de ramos.
+    if (ruta === "/ramo") return disenarRamo(request, env, origen);
+
+    // Identificar una flor.
     let cuerpo;
     try { cuerpo = await request.json(); } catch { return responder({ error: "Datos inválidos" }, 400, origen); }
     const imagen = cuerpo && cuerpo.imagen;
     if (typeof imagen !== "string" || imagen.length > 4_000_000) {
       return responder({ error: "Falta la foto o es demasiado grande" }, 400, origen);
     }
-
-    // Le preguntamos a Claude.
-    const respuesta = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2026-10-21",
-        "anthropic-beta": "server-side-fallback-2026-07-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5-5",
-        max_tokens: 16000,
-        fallbacks: "default", // si Claude rechaza la consulta, la reintenta con otro modelo
-        output_config: { effort: "medium", format: { type: "json_schema", schema: FICHA } },
-        system: INSTRUCCIONES,
-        messages: [{
-          role: "user",
-          content: [
-            { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imagen } },
-            { type: "text", text: "¿Qué flor es? Llena la ficha." },
-          ],
-        }],
-      }),
-    });
-
-    if (!respuesta.ok) {
-      const detalle = await respuesta.text();
-      console.log("Error de Claude", respuesta.status, detalle);
-      return responder({ error: "Claude no pudo responder ahora. Intenta de nuevo en un momento." }, 502, origen);
-    }
-
-    const mensaje = await respuesta.json();
-    if (mensaje.stop_reason === "refusal") {
-      return responder({ error: "No se pudo analizar esta foto. Prueba con otra." }, 422, origen);
-    }
-    const bloque = (mensaje.content || []).find((b) => b.type === "text");
-    try {
-      return responder(JSON.parse(bloque.text), 200, origen);
-    } catch {
-      return responder({ error: "La respuesta llegó incompleta. Intenta de nuevo." }, 502, origen);
-    }
+    return preguntarAClaude(env, origen, INSTRUCCIONES, FICHA, [
+      { type: "image", source: { type: "base64", media_type: "image/jpeg", data: imagen } },
+      { type: "text", text: "¿Qué flor es? Llena la ficha." },
+    ], "No se pudo analizar esta foto. Prueba con otra.");
   },
 };

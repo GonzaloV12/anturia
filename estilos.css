@@ -287,3 +287,70 @@ body {
   color: var(--blanco);
   cursor: pointer;
 }
+
+/* 9. Asistente de ramos */
+.form-ramo { display: flex; flex-direction: column; gap: 18px; margin-top: 12px; }
+.form-ramo fieldset { border: none; margin: 0; padding: 0; }
+.form-ramo legend, .campo > span { font-weight: 600; margin-bottom: 8px; display: block; padding: 0; }
+
+/* Opciones tipo "pastilla": el círculo del radio se oculta y se pinta la etiqueta */
+.opciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.opciones input { position: absolute; opacity: 0; pointer-events: none; }
+.opciones span {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--blanco);
+  border: 1.5px solid var(--rosa-claro);
+  color: var(--tinta);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.opciones input:checked + span { background: var(--rosa); border-color: var(--rosa); color: var(--blanco); font-weight: 600; }
+.opciones input:focus-visible + span { outline: 2px solid var(--verde); outline-offset: 2px; }
+
+.campo input, .campo textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 12px 14px;
+  border: 1.5px solid var(--rosa-claro);
+  border-radius: 14px;
+  background: var(--blanco);
+  color: var(--tinta);
+  resize: vertical;
+}
+.casilla { display: flex; align-items: center; gap: 10px; color: var(--tinta-suave); }
+.casilla input { width: 20px; height: 20px; accent-color: var(--rosa); }
+
+.boton-disenar {
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--rosa);
+  color: var(--blanco);
+  box-shadow: 0 10px 24px rgba(217, 114, 127, 0.35);
+  cursor: pointer;
+}
+.boton-disenar:disabled { opacity: 0.6; cursor: wait; }
+
+.resultado-ramo { margin-top: 24px; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 12px; }
+.etiqueta-pequena { text-transform: uppercase; letter-spacing: 2px; font-size: 12px; color: var(--rosa); font-weight: 600; margin: 0 0 4px; }
+
+.paleta { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 4px; }
+.muestra { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; text-align: center; }
+.muestra-color { width: 48px; height: 48px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.muestra small { font-size: 11px; color: var(--tinta-suave); line-height: 1.2; }
+
+.lista-flores { list-style: none; padding: 0 !important; display: flex; flex-direction: column; gap: 12px; }
+.lista-flores li { border-bottom: 1px solid var(--rosa-claro); padding-bottom: 10px; }
+.lista-flores li:last-child { border-bottom: none; padding-bottom: 0; }
+.flor-titulo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--tinta); }
+.flor-datos { font-size: 13px; color: var(--rosa); font-weight: 600; margin: 2px 0; }
+.etiqueta-herbario { background: var(--verde-claro); color: var(--verde); font-size: 12px; padding: 2px 10px; }
+.seccion ol { margin: 0; padding-left: 20px; color: var(--tinta-suave); }
+.seccion ol li { margin-bottom: 6px; }

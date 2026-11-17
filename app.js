@@ -33,6 +33,7 @@ const pantallas = {
   inicio: document.getElementById("pantalla-inicio"),
   ficha: document.getElementById("pantalla-ficha"),
   herbario: document.getElementById("pantalla-herbario"),
+  ramos: document.getElementById("pantalla-ramos"),
 };
 const entradaCamara = document.getElementById("entrada-camara");
 const entradaGaleria = document.getElementById("entrada-galeria");
@@ -47,6 +48,10 @@ const cajaNube = document.getElementById("caja-nube");
 const fotoFlor = document.getElementById("foto-flor");
 const ficha = document.getElementById("ficha");
 const accionesFicha = document.getElementById("acciones-ficha");
+const botonRamos = document.getElementById("boton-ramos");
+const botonVolverRamos = document.getElementById("boton-volver-ramos");
+const formRamo = document.getElementById("form-ramo");
+const resultadoRamo = document.getElementById("resultado-ramo");
 
 // Desde dónde se abrió la ficha, para que "Volver" regrese al lugar correcto.
 let volverA = "inicio";
@@ -347,6 +352,157 @@ async function identificar(fotoParaClaude) {
 }
 
 // ============================================================
+// 5b. ASISTENTE DE RAMOS
+// ============================================================
+// Ramo de ejemplo para el modo demostración (cuando no hay intermediario).
+const ramoEjemplo = {
+  nombre: "Jardín al amanecer",
+  concepto: "Un ramo suelto y romántico en tonos pastel, con movimiento natural.",
+  paleta: [
+    { color: "Rosa empolvado", hex: "#E8B4B8" },
+    { color: "Durazno", hex: "#F6C9A8" },
+    { color: "Crema", hex: "#F7EFE2" },
+    { color: "Verde salvia", hex: "#9CAF88" },
+  ],
+  flores: [
+    { nombre: "Rosa de jardín", cantidad: "5 tallos", funcion: "protagonista", por_que: "Aporta volumen y el toque romántico.", en_herbario: true },
+    { nombre: "Ranúnculo", cantidad: "6 tallos", funcion: "secundaria", por_que: "Sus capas de pétalos acompañan a la rosa sin competir.", en_herbario: false },
+    { nombre: "Gypsophila", cantidad: "3 tallos", funcion: "relleno", por_que: "Llena huecos y da ligereza.", en_herbario: false },
+  ],
+  follaje: ["Eucalipto dólar", "Ruscus"],
+  pasos: [
+    "Limpia los tallos: quita hojas y espinas de la parte baja.",
+    "Arma la base cruzando el follaje en espiral.",
+    "Coloca las rosas al centro, a distintas alturas.",
+    "Agrega los ranúnculos alrededor y rellena con gypsophila.",
+    "Amarra en el punto de unión y corta los tallos al mismo largo.",
+  ],
+  significado: "Amor tierno y alegría por un nuevo comienzo.",
+  consejos: ["Mantén el ramo en agua fresca hasta la entrega.", "Si no hay ranúnculos, usa lisianthus."],
+  costo: "Medio: unas 14 flores más follaje.",
+};
+
+function dibujarRamo(r) {
+  const lista = (items) => (items || []).map((x) => `<li>${escapar(x)}</li>`).join("");
+  const hexValido = (h) => (/^#[0-9a-f]{6}$/i.test(h) ? h : "#cccccc");
+  const funciones = { protagonista: "Protagonista", secundaria: "Secundaria", relleno: "Relleno" };
+
+  resultadoRamo.innerHTML = `
+    <article class="ficha ficha-ramo">
+      <p class="etiqueta-pequena">Tu ramo</p>
+      <h2>${escapar(r.nombre)}</h2>
+      <p class="nombre-cientifico">${escapar(r.concepto)}</p>
+
+      <div class="paleta">
+        ${(r.paleta || []).map((c) => `
+          <div class="muestra">
+            <span class="muestra-color" style="background:${hexValido(c.hex)}"></span>
+            <small>${escapar(c.color)}</small>
+          </div>`).join("")}
+      </div>
+
+      <div class="seccion">
+        <h3>🌸 Flores</h3>
+        <ul class="lista-flores">
+          ${(r.flores || []).map((f) => `
+            <li>
+              <div class="flor-titulo">
+                <strong>${escapar(f.nombre)}</strong>
+                ${f.en_herbario ? `<span class="etiqueta etiqueta-herbario">📖 En tu herbario</span>` : ""}
+              </div>
+              <div class="flor-datos">${escapar(f.cantidad)} · ${escapar(funciones[f.funcion] || f.funcion)}</div>
+              <div>${escapar(f.por_que)}</div>
+            </li>`).join("")}
+        </ul>
+      </div>
+      <div class="seccion">
+        <h3>🌿 Follaje</h3>
+        <ul>${lista(r.follaje)}</ul>
+      </div>
+      <div class="seccion">
+        <h3>✂️ Cómo armarlo</h3>
+        <ol>${lista(r.pasos)}</ol>
+      </div>
+      <div class="seccion">
+        <h3>💗 Lo que transmite</h3>
+        <p>${escapar(r.significado)}</p>
+      </div>
+      <div class="seccion">
+        <h3>💡 Consejos</h3>
+        <ul>${lista(r.consejos)}</ul>
+      </div>
+      <div class="seccion">
+        <h3>💰 Costo aproximado</h3>
+        <p>${escapar(r.costo)}</p>
+      </div>
+    </article>
+    <button id="boton-otro-ramo" class="boton-galeria">✏️ Cambiar el pedido</button>`;
+
+  document.getElementById("boton-otro-ramo").addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  resultadoRamo.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function pedirRamo(evento) {
+  evento.preventDefault();
+  const datos = new FormData(formRamo);
+
+  // Sin intermediario (panel de demostración): ramo de ejemplo.
+  if (!URL_INTERMEDIARIO) {
+    dibujarRamo(ramoEjemplo);
+    resultadoRamo.insertAdjacentHTML("afterbegin", `<div class="aviso">🌱 Modo demostración: este es un ramo de ejemplo.</div>`);
+    return;
+  }
+
+  // El asistente usa la clave del herbario para proteger tu saldo.
+  if (!leer(LLAVE_CLAVE, "")) {
+    resultadoRamo.innerHTML = `
+      <div class="aviso">🔒 Para usar el asistente, primero conecta tu herbario con su clave.</div>
+      <button id="ir-a-herbario" class="boton-galeria">📖 Ir al herbario</button>`;
+    document.getElementById("ir-a-herbario").addEventListener("click", () => mostrarHerbario({ conNube: true }));
+    return;
+  }
+
+  // Nombres de las flores del herbario (sin repetir), si ella lo pidió.
+  let nombres = [];
+  if (datos.get("usarHerbario")) {
+    try { nombres = [...new Set((await herbario.todas()).map((f) => f.ficha.nombre))]; } catch {}
+  }
+
+  const boton = formRamo.querySelector(".boton-disenar");
+  boton.disabled = true;
+  resultadoRamo.innerHTML = `
+    <div class="cargando">
+      <div class="girando" aria-hidden="true">💐</div>
+      <p>Diseñando tu ramo…</p>
+    </div>`;
+  resultadoRamo.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  try {
+    const respuesta = await fetch(URL_INTERMEDIARIO + "/ramo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Clave-Herbario": leer(LLAVE_CLAVE, "") },
+      body: JSON.stringify({
+        ocasion: datos.get("ocasion"),
+        estilo: datos.get("estilo"),
+        tamano: datos.get("tamano"),
+        presupuesto: datos.get("presupuesto"),
+        notas: datos.get("notas"),
+        herbario: nombres,
+      }),
+    });
+    const ramo = await respuesta.json();
+    if (!respuesta.ok) throw new Error(ramo.error || "No se pudo diseñar el ramo.");
+    dibujarRamo(ramo);
+  } catch (error) {
+    resultadoRamo.innerHTML = `<div class="aviso aviso-error">⚠️ ${escapar(error.message || "Revisa tu conexión e intenta de nuevo.")}</div>`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+// ============================================================
 // 6. BOTONES
 // ============================================================
 // Lo que pasa con una foto, venga de la cámara o de la galería.
@@ -408,6 +564,9 @@ botonVolver.addEventListener("click", () => {
 });
 
 botonHerbario.addEventListener("click", () => mostrarHerbario({ conNube: true }));
+botonRamos.addEventListener("click", () => irA("ramos"));
+botonVolverRamos.addEventListener("click", () => irA("inicio"));
+formRamo.addEventListener("submit", pedirRamo);
 botonVolverHerbario.addEventListener("click", () => irA("inicio"));
 
 // Tocar una tarjeta del herbario abre su ficha.

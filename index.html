@@ -44,10 +44,10 @@
       <input id="entrada-galeria" type="file" accept="image/*" hidden>
     </label>
 
-    <!-- Accesos: el herbario ya funciona; el quiz viene después -->
+    <!-- Accesos: el herbario y el asistente de ramos -->
     <nav class="proximamente">
       <button id="boton-herbario" class="tarjeta-futura activa"><span>📖</span>Herbario<small id="contador-herbario">Sin flores aún</small></button>
-      <div class="tarjeta-futura"><span>🎓</span>Quiz<small>Pronto</small></div>
+      <button id="boton-ramos" class="tarjeta-futura activa"><span>💐</span>Ramos<small>Diseña un ramo</small></button>
     </nav>
   </main>
 
@@ -84,6 +84,67 @@
 
     <!-- JavaScript llena esta cuadrícula con una tarjeta por flor -->
     <div id="lista-herbario" class="cuadricula"></div>
+  </section>
+
+  <!-- ===== PANTALLA 4: ASISTENTE DE RAMOS (empieza oculta) ===== -->
+  <section id="pantalla-ramos" class="pantalla" hidden>
+    <button id="boton-volver-ramos" class="boton-volver">← Inicio</button>
+    <h2 class="titulo-pantalla">Asistente de ramos</h2>
+    <p class="lema">Cuéntame para qué es y te propongo un diseño.</p>
+
+    <!-- El formulario: cada "fieldset" es una pregunta -->
+    <form id="form-ramo" class="form-ramo">
+      <fieldset>
+        <legend>Ocasión</legend>
+        <div class="opciones">
+          <label><input type="radio" name="ocasion" value="boda" checked><span>💍 Boda</span></label>
+          <label><input type="radio" name="ocasion" value="cumpleaños"><span>🎂 Cumpleaños</span></label>
+          <label><input type="radio" name="ocasion" value="aniversario"><span>💞 Aniversario</span></label>
+          <label><input type="radio" name="ocasion" value="romántico"><span>🌹 Romántico</span></label>
+          <label><input type="radio" name="ocasion" value="graduación"><span>🎓 Graduación</span></label>
+          <label><input type="radio" name="ocasion" value="condolencias"><span>🕊️ Condolencias</span></label>
+          <label><input type="radio" name="ocasion" value="otra"><span>✨ Otra</span></label>
+        </div>
+      </fieldset>
+
+      <label class="campo">
+        <span>Colores o estilo</span>
+        <input id="ramo-estilo" name="estilo" type="text" maxlength="200" placeholder="Ej. pastel, romántico, campestre">
+      </label>
+
+      <fieldset>
+        <legend>Tamaño</legend>
+        <div class="opciones">
+          <label><input type="radio" name="tamano" value="pequeño"><span>Pequeño</span></label>
+          <label><input type="radio" name="tamano" value="mediano" checked><span>Mediano</span></label>
+          <label><input type="radio" name="tamano" value="grande"><span>Grande</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Presupuesto</legend>
+        <div class="opciones">
+          <label><input type="radio" name="presupuesto" value="bajo"><span>$ Bajo</span></label>
+          <label><input type="radio" name="presupuesto" value="medio" checked><span>$$ Medio</span></label>
+          <label><input type="radio" name="presupuesto" value="alto"><span>$$$ Alto</span></label>
+        </div>
+      </fieldset>
+
+      <label class="campo">
+        <span>Notas (opcional)</span>
+        <textarea id="ramo-notas" name="notas" maxlength="500" rows="2" placeholder="Ej. a la novia le encantan las peonías"></textarea>
+      </label>
+
+      <label class="casilla">
+        <input id="ramo-herbario" name="usarHerbario" type="checkbox" checked>
+        <span>📖 Usar flores de mi herbario cuando combinen</span>
+      </label>
+
+      <button type="submit" class="boton-disenar">💐 Diseñar ramo</button>
+    </form>
+
+    <!-- Aquí aparece el ramo que diseña Claude -->
+    <div id="resultado-ramo" class="resultado-ramo"></div>
   </section>
 
   <!-- Conectamos la "instalación eléctrica" al final, cuando todo ya existe -->
