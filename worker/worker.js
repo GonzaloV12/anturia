@@ -50,20 +50,26 @@ function responder(datos, estado, origen) {
 }
 
 // ============================================================
-// HERBARIO EN LA NUBE (archivero KV de Cloudflare, conectado como HERBARIO).
-// Cada flor se guarda con la llave "flor:<id>". Las flores eliminadas dejan
-// una "lápida" (borrada: true) para que los otros dispositivos también la borren.
-//   GET    /herbario       → lista de { id, fecha, borrada }
-//   GET    /herbario/<id>  → la flor completa (foto + ficha)
-//   PUT    /herbario/<id>  → guarda una flor
-//   DELETE /herbario/<id>  → elimina una flor
+// LA NUBE (archivero KV de Cloudflare, conectado como HERBARIO).
+// Guarda dos colecciones, cada una con su prefijo de llave:
+//   /herbario → "flor:<id>"   (flores escaneadas)
+//   /ramos    → "ramo:<id>"   (ramos guardados)
+// Lo eliminado deja una "lápida" (borrada: true) para que los otros
+// dispositivos también lo borren. "actualizado" marca la última revisión.
+//   GET    /<coleccion>       → { items: [{ id, fecha, actualizado, borrada }] }
+//   GET    /<coleccion>/<id>  → el elemento completo
+//   PUT    /<coleccion>/<id>  → guarda un elemento
+//   DELETE /<coleccion>/<id>  → elimina un elemento
 // ============================================================
-async function manejarHerbario(request, env, origen, ruta) {
+const COLECCIONES = { herbario: "flor:", ramos: "ramo:" };
+
+async function manejarColeccion(request, env, origen, ruta) {
   if (!env.HERBARIO) {
     return responder({ error: "El archivero de la nube no está configurado." }, 500, origen);
   }
 
-  const id = ruta.split("/")[2] || "";
+  const [, coleccion, id = ""] = ruta.split("/");
+  const prefijo = COLECCIONES[coleccion];
   if (id && !/^[0-9]{1,20}$/.test(id)) return responder({ error: "Flor inválida" }, 400, origen);
 
   // Lista de flores (sin fotos, para que sea rápida).
@@ -71,17 +77,17 @@ async function manejarHerbario(request, env, origen, ruta) {
     const flores = [];
     let cursor;
     do {
-      const pagina = await env.HERBARIO.list({ prefix: "flor:", cursor });
+      const pagina = await env.HERBARIO.list({ prefix: prefijo, cursor });
       for (const llave of pagina.keys) {
-        flores.push({ id: llave.name.slice(5), ...(llave.metadata || {}) });
+        flores.push({ id: llave.name.slice(prefijo.length), ...(llave.metadata || {}) });
       }
       cursor = pagina.list_complete ? undefined : pagina.cursor;
     } while (cursor);
-    return responder({ flores }, 200, origen);
+    return responder({ items: flores, flores }, 200, origen); // "flores": compatibilidad con la app anterior
   }
 
   if (request.method === "GET") {
-    const flor = await env.HERBARIO.get("flor:" + id, "json");
+    const flor = await env.HERBARIO.get(prefijo + id, "json");
     return flor ? responder(flor, 200, origen) : responder({ error: "No existe" }, 404, origen);
   }
 
@@ -91,12 +97,12 @@ async function manejarHerbario(request, env, origen, ruta) {
     let flor;
     try { flor = JSON.parse(texto); } catch { return responder({ error: "Datos inválidos" }, 400, origen); }
     if (flor.id !== id || typeof flor.fecha !== "string") return responder({ error: "Datos inválidos" }, 400, origen);
-    await env.HERBARIO.put("flor:" + id, texto, { metadata: { fecha: flor.fecha } });
+    await env.HERBARIO.put(prefijo + id, texto, { metadata: { fecha: flor.fecha, actualizado: flor.actualizado || flor.fecha } });
     return responder({ ok: true }, 200, origen);
   }
 
   if (request.method === "DELETE") {
-    await env.HERBARIO.put("flor:" + id, "{}", { metadata: { borrada: true } });
+    await env.HERBARIO.put(prefijo + id, "{}", { metadata: { borrada: true } });
     return responder({ ok: true }, 200, origen);
   }
 
@@ -217,10 +223,11 @@ export default {
     // El navegador pregunta primero "¿puedo enviarte datos?" (preflight).
     if (request.method === "OPTIONS") return new Response(null, { headers: cabecerasCORS(origen) });
 
-    // Herbario en la nube.
-    if (ruta === "/herbario" || ruta.startsWith("/herbario/")) {
+    // La nube: herbario y ramos guardados.
+    const coleccion = ruta.split("/")[1];
+    if (COLECCIONES[coleccion]) {
       if (origen !== ORIGEN_PERMITIDO) return responder({ error: "Origen no permitido" }, 403, origen);
-      return manejarHerbario(request, env, origen, ruta);
+      return manejarColeccion(request, env, origen, ruta);
     }
 
     if (request.method !== "POST") return responder({ error: "Usa POST" }, 405, origen);

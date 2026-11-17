@@ -333,3 +333,45 @@ body {
 .etiqueta-herbario { background: var(--verde-claro); color: var(--verde); font-size: 12px; padding: 2px 10px; }
 .seccion ol { margin: 0; padding-left: 20px; color: var(--tinta-suave); }
 .seccion ol li { margin-bottom: 6px; }
+
+/* 10. Mis ramos */
+.mis-ramos:empty { display: none; }
+.mis-ramos { margin: 8px 0 20px; }
+.subtitulo { font-size: 16px; margin: 0 0 10px; }
+.subtitulo small { color: var(--tinta-suave); font-weight: 400; }
+.lista-ramos { display: flex; flex-direction: column; gap: 10px; }
+.tarjeta-ramo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--blanco);
+  border: none;
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  font: inherit;
+  color: var(--tinta);
+  text-align: left;
+  cursor: pointer;
+}
+.tarjeta-ramo:active { transform: scale(0.98); }
+.tarjeta-ramo > span:last-child { color: var(--tinta-suave); font-size: 22px; }
+.mini-paleta { display: grid; grid-template-columns: repeat(2, 14px); gap: 3px; flex: none; }
+.mini-paleta i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.tarjeta-ramo-texto { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tarjeta-ramo-texto strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tarjeta-ramo-texto small { color: var(--tinta-suave); font-size: 13px; }
+
+.caja-guardar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  background: var(--verde-claro);
+  border-radius: var(--radio);
+}
+.caja-guardar .campo > span { color: var(--verde); }
+#detalle-ramo { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+.nota-fecha { text-align: center; color: var(--tinta-suave); margin: 8px 0 0; }
+#pantalla-ramo .boton-eliminar { align-self: center; margin: 0 auto; display: block; }

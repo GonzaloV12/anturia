@@ -34,6 +34,7 @@ const pantallas = {
   ficha: document.getElementById("pantalla-ficha"),
   herbario: document.getElementById("pantalla-herbario"),
   ramos: document.getElementById("pantalla-ramos"),
+  ramo: document.getElementById("pantalla-ramo"),
 };
 const entradaCamara = document.getElementById("entrada-camara");
 const entradaGaleria = document.getElementById("entrada-galeria");
@@ -52,6 +53,9 @@ const botonRamos = document.getElementById("boton-ramos");
 const botonVolverRamos = document.getElementById("boton-volver-ramos");
 const formRamo = document.getElementById("form-ramo");
 const resultadoRamo = document.getElementById("resultado-ramo");
+const listaMisRamos = document.getElementById("mis-ramos");
+const detalleRamo = document.getElementById("detalle-ramo");
+const botonVolverRamo = document.getElementById("boton-volver-ramo");
 
 // Desde dónde se abrió la ficha, para que "Volver" regrese al lugar correcto.
 let volverA = "inicio";
@@ -70,45 +74,59 @@ function irA(nombre) {
 }
 
 // ============================================================
-// 3. EL HERBARIO: la "bodega" del navegador (IndexedDB).
-//    Cada flor se guarda como: { id, fecha, foto, ficha }.
+// 3. LA "BODEGA" DEL NAVEGADOR (IndexedDB), con dos estantes:
+//    "flores" → { id, fecha, foto, ficha }
+//    "ramos"  → { id, fecha, actualizado, titulo, pedido, ramo }
 // ============================================================
 let bodega = null;
 
 function abrirBodega() {
   if (bodega) return bodega;
   bodega = new Promise((ok, falla) => {
-    const pedido = indexedDB.open("anturia", 1);
-    // La primera vez se crea el "estante" donde van las flores.
-    pedido.onupgradeneeded = () => pedido.result.createObjectStore("flores", { keyPath: "id" });
+    const pedido = indexedDB.open("anturia", 2); // versión 2: se agregó el estante de ramos
+    // Se crean los estantes que falten (los que ya existen no se tocan).
+    pedido.onupgradeneeded = () => {
+      const db = pedido.result;
+      if (!db.objectStoreNames.contains("flores")) db.createObjectStore("flores", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("ramos")) db.createObjectStore("ramos", { keyPath: "id" });
+    };
     pedido.onsuccess = () => ok(pedido.result);
     pedido.onerror = () => falla(pedido.error);
   });
   return bodega;
 }
 
-// Hace una operación en el estante de flores y espera a que termine.
-async function enBodega(modo, operacion) {
+// Hace una operación en un estante y espera a que termine.
+async function enBodega(nombreEstante, modo, operacion) {
   const db = await abrirBodega();
   return new Promise((ok, falla) => {
-    const estante = db.transaction("flores", modo).objectStore("flores");
+    const estante = db.transaction(nombreEstante, modo).objectStore(nombreEstante);
     const pedido = operacion(estante);
     pedido.onsuccess = () => ok(pedido.result);
     pedido.onerror = () => falla(pedido.error);
   });
 }
 
-const herbario = {
-  todas: async () => (await enBodega("readonly", (e) => e.getAll())).sort((a, b) => b.fecha.localeCompare(a.fecha)),
-  una: (id) => enBodega("readonly", (e) => e.get(id)),
-  guardar: (flor) => enBodega("readwrite", (e) => e.put(flor)),
-  eliminar: (id) => enBodega("readwrite", (e) => e.delete(id)),
-};
+// Un "cajón": las cuatro operaciones básicas sobre un estante.
+function cajon(nombreEstante) {
+  return {
+    todas: async () => (await enBodega(nombreEstante, "readonly", (e) => e.getAll())).sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    una: (id) => enBodega(nombreEstante, "readonly", (e) => e.get(id)),
+    guardar: (x) => enBodega(nombreEstante, "readwrite", (e) => e.put(x)),
+    eliminar: (id) => enBodega(nombreEstante, "readwrite", (e) => e.delete(id)),
+  };
+}
+
+const herbario = cajon("flores");
+const misRamos = cajon("ramos");
 
 // ============================================================
-// 3b. LA NUBE: copia del herbario en el archivero de Cloudflare.
+// 3b. LA NUBE: copia de los dos cajones en el archivero de Cloudflare.
 // ============================================================
-const LLAVE_PENDIENTES = "anturia-borrar-pendiente";
+const COLECCIONES = {
+  herbario: { ruta: "herbario", local: herbario, pendientes: "anturia-borrar-pendiente" },
+  ramos: { ruta: "ramos", local: misRamos, pendientes: "anturia-borrar-pendiente-ramos" },
+};
 
 function leer(llave, porDefecto) {
   try { return JSON.parse(localStorage.getItem(llave)) ?? porDefecto; } catch { return porDefecto; }
@@ -118,11 +136,11 @@ function escribir(llave, valor) {
 }
 
 // Hace un pedido al archivero, a través del intermediario.
-async function nube(metodo, id, flor) {
-  const respuesta = await fetch(URL_INTERMEDIARIO + "/herbario" + (id ? "/" + id : ""), {
+async function nube(coleccion, metodo, id, dato) {
+  const respuesta = await fetch(URL_INTERMEDIARIO + "/" + coleccion.ruta + (id ? "/" + id : ""), {
     method: metodo,
-    headers: flor ? { "Content-Type": "application/json" } : {},
-    body: flor ? JSON.stringify(flor) : undefined,
+    headers: dato ? { "Content-Type": "application/json" } : {},
+    body: dato ? JSON.stringify(dato) : undefined,
   });
   const datos = await respuesta.json();
   if (!respuesta.ok) {
@@ -133,29 +151,53 @@ async function nube(metodo, id, flor) {
   return datos;
 }
 
-// Cuadra los dos inventarios: lo que falte en el teléfono se baja,
-// lo que falte en la nube se sube, y lo borrado se borra en ambos.
-async function sincronizar() {
-  if (!URL_INTERMEDIARIO) return false;
+// Sube un elemento a la nube sin interrumpir (si falla, se sube al sincronizar).
+function subirANube(coleccion, x) {
+  return URL_INTERMEDIARIO ? nube(coleccion, "PUT", x.id, x) : Promise.reject(new Error("sin nube"));
+}
 
-  // Primero, borrados que quedaron pendientes (por ejemplo, sin internet).
-  for (const id of leer(LLAVE_PENDIENTES, [])) await nube("DELETE", id);
-  escribir(LLAVE_PENDIENTES, null);
+// Borra en la nube; si no hay internet, lo anota para más tarde.
+function borrarEnNube(coleccion, id) {
+  if (!URL_INTERMEDIARIO) return;
+  nube(coleccion, "DELETE", id).catch(() => escribir(coleccion.pendientes, [...leer(coleccion.pendientes, []), id]));
+}
 
-  const { flores: enNube } = await nube("GET");
-  const locales = await herbario.todas();
-  const idsLocales = new Set(locales.map((f) => f.id));
-  const idsNube = new Set(enNube.map((f) => f.id));
+// La "revisión" de un elemento: la fecha de su último cambio.
+const revision = (x) => x.actualizado || x.fecha || "";
+
+// Cuadra los dos inventarios de un cajón: lo que falte o esté viejo en el teléfono
+// se baja, lo que falte o esté viejo en la nube se sube, y lo borrado se borra en ambos.
+async function sincronizarColeccion(coleccion) {
+  for (const id of leer(coleccion.pendientes, [])) await nube(coleccion, "DELETE", id);
+  escribir(coleccion.pendientes, null);
+
+  const respuesta = await nube(coleccion, "GET");
+  const enNube = respuesta.items || respuesta.flores || [];
+  const locales = new Map((await coleccion.local.todas()).map((x) => [x.id, x]));
+  const remotos = new Map(enNube.map((x) => [x.id, x]));
   let cambios = false;
 
-  for (const f of enNube) {
-    if (f.borrada && idsLocales.has(f.id)) { await herbario.eliminar(f.id); cambios = true; }
-    if (!f.borrada && !idsLocales.has(f.id)) { await herbario.guardar(await nube("GET", f.id)); cambios = true; }
+  for (const r of enNube) {
+    const local = locales.get(r.id);
+    if (r.borrada) {
+      if (local) { await coleccion.local.eliminar(r.id); cambios = true; }
+    } else if (!local || revision(r) > revision(local)) {
+      await coleccion.local.guardar(await nube(coleccion, "GET", r.id));
+      cambios = true;
+    }
   }
-  for (const f of locales) {
-    if (!idsNube.has(f.id)) await nube("PUT", f.id, f);
+  for (const local of locales.values()) {
+    const r = remotos.get(local.id);
+    if (!r || (!r.borrada && revision(local) > revision(r))) await nube(coleccion, "PUT", local.id, local);
   }
   return cambios;
+}
+
+async function sincronizar() {
+  if (!URL_INTERMEDIARIO) return false;
+  const flores = await sincronizarColeccion(COLECCIONES.herbario);
+  const ramos = await sincronizarColeccion(COLECCIONES.ramos);
+  return flores || ramos;
 }
 
 // Muestra en el herbario el estado de la nube.
@@ -240,8 +282,7 @@ async function abrirDelHerbario(id) {
       return;
     }
     await herbario.eliminar(id);
-    // Si no hay internet, se anota para borrarla en la nube más tarde.
-    nube("DELETE", id).catch(() => escribir(LLAVE_PENDIENTES, [...leer(LLAVE_PENDIENTES, []), id]));
+    borrarEnNube(COLECCIONES.herbario, id);
     await actualizarContador();
     mostrarHerbario();
   });
@@ -356,15 +397,16 @@ const ramoEjemplo = {
   costo: "Medio: unas 14 flores más follaje.",
 };
 
-function dibujarRamo(r) {
+// Arma el HTML de la ficha de un ramo (sirve para uno nuevo y para uno guardado).
+function htmlRamo(r, titulo) {
   const lista = (items) => (items || []).map((x) => `<li>${escapar(x)}</li>`).join("");
   const hexValido = (h) => (/^#[0-9a-f]{6}$/i.test(h) ? h : "#cccccc");
   const funciones = { protagonista: "Protagonista", secundaria: "Secundaria", relleno: "Relleno" };
 
-  resultadoRamo.innerHTML = `
+  return `
     <article class="ficha ficha-ramo">
       <p class="etiqueta-pequena">Tu ramo</p>
-      <h2>${escapar(r.nombre)}</h2>
+      <h2>${escapar(titulo || r.nombre)}</h2>
       <p class="nombre-cientifico">${escapar(r.concepto)}</p>
 
       <div class="paleta">
@@ -409,18 +451,140 @@ function dibujarRamo(r) {
         <h3>💰 Costo aproximado</h3>
         <p>${escapar(r.costo)}</p>
       </div>
-    </article>
+    </article>`;
+}
+
+// Lo que se pidió por última vez (se guarda junto con el ramo).
+let ultimoPedido = null;
+
+// Muestra un ramo recién diseñado, con la opción de guardarlo con un nombre.
+function dibujarRamo(r) {
+  resultadoRamo.innerHTML = htmlRamo(r) + `
+    <div id="caja-guardar-ramo" class="caja-guardar">
+      <label class="campo">
+        <span>Nombre del ramo</span>
+        <input id="nombre-ramo" type="text" maxlength="80" value="${escapar(r.nombre)}">
+      </label>
+      <button id="boton-guardar-ramo" class="boton-disenar">💾 Guardar ramo</button>
+    </div>
     <button id="boton-otro-ramo" class="boton-galeria">✏️ Cambiar el pedido</button>`;
 
+  document.getElementById("boton-guardar-ramo").addEventListener("click", () => {
+    guardarRamo(r, document.getElementById("nombre-ramo").value);
+  });
   document.getElementById("boton-otro-ramo").addEventListener("click", () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
   resultadoRamo.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function guardarRamo(r, titulo) {
+  const caja = document.getElementById("caja-guardar-ramo");
+  const ahora = new Date().toISOString();
+  const guardado = {
+    id: String(Date.now()),
+    fecha: ahora,
+    actualizado: ahora,
+    titulo: titulo.trim() || r.nombre,
+    pedido: ultimoPedido,
+    ramo: r,
+  };
+  try {
+    await misRamos.guardar(guardado);
+    caja.innerHTML = `<p class="nota-guardada">✓ Guardado en Mis ramos</p>`;
+    dibujarMisRamos();
+    subirANube(COLECCIONES.ramos, guardado)
+      .then(() => { caja.innerHTML = `<p class="nota-guardada">✓ Guardado en Mis ramos ☁️</p>`; })
+      .catch(() => {});
+  } catch {
+    caja.innerHTML = `<p class="nota-guardada">No se pudo guardar el ramo (¿modo incógnito o memoria llena?).</p>`;
+  }
+}
+
+// La lista "Mis ramos" arriba del formulario.
+async function dibujarMisRamos() {
+  let ramos = [];
+  try { ramos = await misRamos.todas(); } catch {}
+  if (!ramos.length) { listaMisRamos.innerHTML = ""; return; }
+  const ocasiones = { boda: "Boda", "cumpleaños": "Cumpleaños", aniversario: "Aniversario", "romántico": "Romántico", "graduación": "Graduación", condolencias: "Condolencias", otra: "Otra ocasión" };
+  const hexValido = (h) => (/^#[0-9a-f]{6}$/i.test(h) ? h : "#cccccc");
+  listaMisRamos.innerHTML = `
+    <h3 class="subtitulo">Mis ramos <small>(${ramos.length})</small></h3>
+    <div class="lista-ramos">
+      ${ramos.map((x) => `
+        <button class="tarjeta-ramo" data-id="${escapar(x.id)}">
+          <span class="mini-paleta">
+            ${(x.ramo.paleta || []).slice(0, 4).map((c) => `<i style="background:${hexValido(c.hex)}"></i>`).join("")}
+          </span>
+          <span class="tarjeta-ramo-texto">
+            <strong>${escapar(x.titulo)}</strong>
+            <small>${escapar(ocasiones[x.pedido?.ocasion] || "Ramo")} · ${fechaBonita(x.fecha)}</small>
+          </span>
+          <span aria-hidden="true">›</span>
+        </button>`).join("")}
+    </div>`;
+}
+
+// Abre un ramo guardado: se puede renombrar o eliminar.
+async function abrirRamo(id) {
+  const x = await misRamos.una(id);
+  if (!x) return mostrarRamos();
+  irA("ramo");
+  detalleRamo.innerHTML = htmlRamo(x.ramo, x.titulo) + `
+    <div class="caja-guardar">
+      <label class="campo">
+        <span>Nombre del ramo</span>
+        <input id="renombrar-ramo" type="text" maxlength="80" value="${escapar(x.titulo)}">
+      </label>
+      <button id="boton-renombrar" class="boton-galeria">✏️ Guardar nombre</button>
+      <p id="nota-renombrar" class="nota-guardada" hidden></p>
+    </div>
+    <p class="nota-fecha">💐 Guardado el ${fechaBonita(x.fecha)}</p>
+    <button id="boton-eliminar-ramo" class="boton-eliminar">Eliminar ramo</button>`;
+
+  document.getElementById("boton-renombrar").addEventListener("click", async () => {
+    const nuevo = document.getElementById("renombrar-ramo").value.trim();
+    if (!nuevo) return;
+    x.titulo = nuevo;
+    x.actualizado = new Date().toISOString(); // nueva revisión: gana al sincronizar
+    await misRamos.guardar(x);
+    detalleRamo.querySelector(".ficha-ramo h2").textContent = nuevo;
+    const nota = document.getElementById("nota-renombrar");
+    nota.hidden = false;
+    nota.textContent = "✓ Nombre actualizado";
+    subirANube(COLECCIONES.ramos, x).then(() => { nota.textContent = "✓ Nombre actualizado ☁️"; }).catch(() => {});
+  });
+
+  const botonEliminar = document.getElementById("boton-eliminar-ramo");
+  botonEliminar.addEventListener("click", async () => {
+    if (!botonEliminar.classList.contains("confirmar")) {
+      botonEliminar.classList.add("confirmar");
+      botonEliminar.textContent = "¿Segura? Toca otra vez para eliminar";
+      return;
+    }
+    await misRamos.eliminar(id);
+    borrarEnNube(COLECCIONES.ramos, id);
+    mostrarRamos();
+  });
+}
+
+// Abre la pantalla de ramos y trae de la nube lo que haya cambiado.
+function mostrarRamos() {
+  irA("ramos");
+  dibujarMisRamos();
+  sincronizar().then((cambios) => cambios && dibujarMisRamos()).catch(() => {});
+}
+
 async function pedirRamo(evento) {
   evento.preventDefault();
   const datos = new FormData(formRamo);
+  ultimoPedido = {
+    ocasion: datos.get("ocasion"),
+    estilo: datos.get("estilo"),
+    tamano: datos.get("tamano"),
+    presupuesto: datos.get("presupuesto"),
+    notas: datos.get("notas"),
+  };
 
   // Sin intermediario (panel de demostración): ramo de ejemplo.
   if (!URL_INTERMEDIARIO) {
@@ -448,14 +612,7 @@ async function pedirRamo(evento) {
     const respuesta = await fetch(URL_INTERMEDIARIO + "/ramo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ocasion: datos.get("ocasion"),
-        estilo: datos.get("estilo"),
-        tamano: datos.get("tamano"),
-        presupuesto: datos.get("presupuesto"),
-        notas: datos.get("notas"),
-        herbario: nombres,
-      }),
+      body: JSON.stringify({ ...ultimoPedido, herbario: nombres }),
     });
     const ramo = await respuesta.json();
     if (!respuesta.ok) throw new Error(ramo.error || "No se pudo diseñar el ramo.");
@@ -483,7 +640,7 @@ async function guardarEnHerbario(archivo, datos) {
     accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario</p>`;
     actualizarContador();
     // Copia en la nube (si falla, se sube en la próxima sincronización).
-    if (URL_INTERMEDIARIO) nube("PUT", flor.id, flor)
+    subirANube(COLECCIONES.herbario, flor)
       .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
       .catch(() => {});
   } catch {
@@ -532,7 +689,12 @@ botonVolver.addEventListener("click", () => {
 });
 
 botonHerbario.addEventListener("click", () => mostrarHerbario({ conNube: true }));
-botonRamos.addEventListener("click", () => irA("ramos"));
+botonRamos.addEventListener("click", mostrarRamos);
+botonVolverRamo.addEventListener("click", mostrarRamos);
+listaMisRamos.addEventListener("click", (evento) => {
+  const tarjeta = evento.target.closest(".tarjeta-ramo");
+  if (tarjeta) abrirRamo(tarjeta.dataset.id);
+});
 botonVolverRamos.addEventListener("click", () => irA("inicio"));
 formRamo.addEventListener("submit", pedirRamo);
 botonVolverHerbario.addEventListener("click", () => irA("inicio"));

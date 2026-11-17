@@ -92,6 +92,9 @@
     <h2 class="titulo-pantalla">Asistente de ramos</h2>
     <p class="lema">Cuéntame para qué es y te propongo un diseño.</p>
 
+    <!-- Los ramos que ella guardó (JavaScript llena esta lista) -->
+    <div id="mis-ramos" class="mis-ramos"></div>
+
     <!-- El formulario: cada "fieldset" es una pregunta -->
     <form id="form-ramo" class="form-ramo">
       <fieldset>
@@ -145,6 +148,12 @@
 
     <!-- Aquí aparece el ramo que diseña Claude -->
     <div id="resultado-ramo" class="resultado-ramo"></div>
+  </section>
+
+  <!-- ===== PANTALLA 5: UN RAMO GUARDADO (empieza oculta) ===== -->
+  <section id="pantalla-ramo" class="pantalla" hidden>
+    <button id="boton-volver-ramo" class="boton-volver">← Mis ramos</button>
+    <div id="detalle-ramo"></div>
   </section>
 
   <!-- Conectamos la "instalación eléctrica" al final, cuando todo ya existe -->
