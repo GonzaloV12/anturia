@@ -96,6 +96,26 @@ body {
 .boton-camara:active { transform: scale(0.97); }
 .boton-camara .icono { font-size: 22px; }
 
+/* Botón de la galería: secundario, con borde en vez de relleno */
+.boton-galeria {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 999px;
+  background: var(--blanco);
+  border: 2px solid var(--rosa-claro);
+  color: var(--rosa);
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.boton-galeria:active { transform: scale(0.97); }
+.boton-galeria .icono { font-size: 20px; }
+
 .boton-secundario, .boton-volver {
   background: none;
   border: none;

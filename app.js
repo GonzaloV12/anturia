@@ -35,6 +35,7 @@ const pantallas = {
   herbario: document.getElementById("pantalla-herbario"),
 };
 const entradaCamara = document.getElementById("entrada-camara");
+const entradaGaleria = document.getElementById("entrada-galeria");
 const botonVolver = document.getElementById("boton-volver");
 const botonHerbario = document.getElementById("boton-herbario");
 const botonVolverHerbario = document.getElementById("boton-volver-herbario");
@@ -348,11 +349,11 @@ async function identificar(fotoParaClaude) {
 // ============================================================
 // 6. BOTONES
 // ============================================================
-// Cuando ella toma una foto con la cámara...
-entradaCamara.addEventListener("change", async () => {
-  const archivo = entradaCamara.files[0];
+// Lo que pasa con una foto, venga de la cámara o de la galería.
+async function procesarFoto(entrada) {
+  const archivo = entrada.files[0];
   if (!archivo) return; // si canceló, no hacemos nada
-  entradaCamara.value = ""; // permite tomar otra foto después
+  entrada.value = ""; // permite elegir otra foto después
   fotoFlor.src = URL.createObjectURL(archivo);
   volverA = "inicio";
   accionesFicha.innerHTML = "";
@@ -394,7 +395,11 @@ entradaCamara.addEventListener("change", async () => {
   } catch (error) {
     mostrarError(error.message || "Revisa tu conexión a internet e intenta de nuevo.");
   }
-});
+}
+
+// Los dos botones usan la misma función.
+entradaCamara.addEventListener("change", () => procesarFoto(entradaCamara));
+entradaGaleria.addEventListener("change", () => procesarFoto(entradaGaleria));
 
 // "Volver" desde la ficha: regresa al inicio o al herbario, según de dónde vino.
 botonVolver.addEventListener("click", () => {

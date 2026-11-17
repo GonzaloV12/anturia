@@ -36,6 +36,14 @@
       <input id="entrada-camara" type="file" accept="image/*" capture="environment" hidden>
     </label>
 
+    <!-- El botón de la galería: igual al de la cámara, pero SIN "capture",
+         así el celular deja elegir una foto ya guardada (o recibida por WhatsApp). -->
+    <label class="boton-galeria">
+      <span class="icono" aria-hidden="true">🖼️</span>
+      <span>Galería</span>
+      <input id="entrada-galeria" type="file" accept="image/*" hidden>
+    </label>
+
     <!-- Accesos: el herbario ya funciona; el quiz viene después -->
     <nav class="proximamente">
       <button id="boton-herbario" class="tarjeta-futura activa"><span>📖</span>Herbario<small id="contador-herbario">Sin flores aún</small></button>
