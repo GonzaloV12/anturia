@@ -470,6 +470,27 @@ async function pedirRamo(evento) {
 // ============================================================
 // 6. BOTONES
 // ============================================================
+// Guarda una flor en el herbario del teléfono y, si hay intermediario, también en la nube.
+async function guardarEnHerbario(archivo, datos) {
+  try {
+    const flor = {
+      id: String(Date.now()),
+      fecha: new Date().toISOString(),
+      foto: await achicarFoto(archivo, 800, 0.8), // una copia más liviana para guardar
+      ficha: datos,
+    };
+    await herbario.guardar(flor);
+    accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario</p>`;
+    actualizarContador();
+    // Copia en la nube (si falla, se sube en la próxima sincronización).
+    if (URL_INTERMEDIARIO) nube("PUT", flor.id, flor)
+      .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
+      .catch(() => {});
+  } catch {
+    accionesFicha.innerHTML = `<p class="nota-guardada">No se pudo guardar en el herbario (¿modo incógnito o memoria llena?).</p>`;
+  }
+}
+
 // Lo que pasa con una foto, venga de la cámara o de la galería.
 async function procesarFoto(entrada) {
   const archivo = entrada.files[0];
@@ -480,8 +501,10 @@ async function procesarFoto(entrada) {
   accionesFicha.innerHTML = "";
   irA("ficha");
 
+  // Sin intermediario (panel de demostración): ficha de ejemplo, guardada solo en este navegador.
   if (!URL_INTERMEDIARIO) {
-    mostrarFicha(florEjemplo, "Aún no reconocemos flores reales: esta es una ficha de ejemplo.");
+    mostrarFicha(florEjemplo, "Modo demostración: esta es una ficha de ejemplo.");
+    await guardarEnHerbario(archivo, florEjemplo);
     return;
   }
 
@@ -492,25 +515,7 @@ async function procesarFoto(entrada) {
     mostrarFicha(datos);
 
     // Si es una flor, se guarda sola en el herbario.
-    if (datos.es_flor) {
-      try {
-        const flor = {
-          id: String(Date.now()),
-          fecha: new Date().toISOString(),
-          foto: await achicarFoto(archivo, 800, 0.8), // una copia más liviana para guardar
-          ficha: datos,
-        };
-        await herbario.guardar(flor);
-        accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario</p>`;
-        actualizarContador();
-        // Copia en la nube (si falla, se sube en la próxima sincronización).
-        nube("PUT", flor.id, flor)
-          .then(() => { accionesFicha.innerHTML = `<p class="nota-guardada">✓ Guardada en tu herbario ☁️</p>`; })
-          .catch(() => {});
-      } catch {
-        accionesFicha.innerHTML = `<p class="nota-guardada">No se pudo guardar en el herbario (¿modo incógnito o memoria llena?).</p>`;
-      }
-    }
+    if (datos.es_flor) await guardarEnHerbario(archivo, datos);
   } catch (error) {
     mostrarError(error.message || "Revisa tu conexión a internet e intenta de nuevo.");
   }
